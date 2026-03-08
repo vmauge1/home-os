@@ -38,7 +38,7 @@ function useData(endpoint, table, familyId) {
   useEffect(() => {
     load().finally(() => setLoading(false));
 
-    // Abonnement temps réel Supabase (se déclenche quand la DB change)
+    // Abonnement temps réel Supabase
     const channel = supabase.channel(`${table}-${familyId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table, filter: `family_id=eq.${familyId}` }, load)
       .subscribe();
@@ -49,6 +49,12 @@ function useData(endpoint, table, familyId) {
   return [data, loading, load];
 }
 
+// Appel API + rechargement immédiat des données
+async function apiAndReload(method, path, load, body) {
+  await api(method, path, body);
+  await load();
+}
+
 async function api(method, path, body) {
   const res = await fetch(path, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Erreur'); }
@@ -57,13 +63,13 @@ async function api(method, path, body) {
 
 // ── Onglet Courses ───────────────────────────────────────────
 function CoursesTab({ familyId }) {
-  const [items, loading] = useData('/api/courses', 'courses', familyId);
+  const [items, loading, load] = useData('/api/courses', 'courses', familyId);
   const [name, setName] = useState('');
   const [qty, setQty] = useState('');
 
-  const add = async () => { if (!name.trim()) return; await api('POST', '/api/courses', { name, qty }); setName(''); setQty(''); };
-  const toggle = (id) => api('PATCH', `/api/courses/${id}`, { toggle: true });
-  const del = (id) => api('DELETE', `/api/courses/${id}`);
+  const add = async () => { if (!name.trim()) return; await apiAndReload('POST', '/api/courses', load, { name, qty }); setName(''); setQty(''); };
+  const toggle = (id) => apiAndReload('PATCH', `/api/courses/${id}`, load, { toggle: true });
+  const del = (id) => apiAndReload('DELETE', `/api/courses/${id}`, load);
 
   const todo = items.filter(i => !i.done);
   const done = items.filter(i => i.done);
@@ -105,8 +111,8 @@ function CoursesTab({ familyId }) {
 
 // ── Onglet Ménage ────────────────────────────────────────────
 function MenageTab({ familyId }) {
-  const [tasks, loadingT] = useData('/api/menage/tasks', 'menage_tasks', familyId);
-  const [machines, loadingM] = useData('/api/menage/machines', 'machine_tasks', familyId);
+  const [tasks, loadingT, loadT] = useData('/api/menage/tasks', 'menage_tasks', familyId);
+  const [machines, loadingM, loadM] = useData('/api/menage/machines', 'machine_tasks', familyId);
   const [newTask, setNewTask] = useState('');
   const [machForm, setMachForm] = useState({ machine: 'lave-linge', linge: '', programme: '' });
   const [tab, setTab] = useState('tasks');
@@ -124,15 +130,15 @@ function MenageTab({ familyId }) {
       {tab === 'tasks' && <>
         <Card>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Input value={newTask} onChange={setNewTask} placeholder="Nouvelle tâche..." onEnter={async () => { await api('POST', '/api/menage/tasks', { name: newTask }); setNewTask(''); }} />
-            <Btn onClick={async () => { await api('POST', '/api/menage/tasks', { name: newTask }); setNewTask(''); }} variant="primary">+</Btn>
+            <Input value={newTask} onChange={setNewTask} placeholder="Nouvelle tâche..." onEnter={async () => { await apiAndReload('POST', '/api/menage/tasks', loadT, { name: newTask }); setNewTask(''); }} />
+            <Btn onClick={async () => { await apiAndReload('POST', '/api/menage/tasks', loadT, { name: newTask }); setNewTask(''); }} variant="primary">+</Btn>
           </div>
         </Card>
         {loadingT ? <p style={{ color: C.muted }}>Chargement...</p> : tasks.map(t => (
           <Card key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, opacity: t.done ? 0.5 : 1 }}>
-            <button onClick={() => api('PATCH', `/api/menage/tasks/${t.id}`)} style={{ width: 22, height: 22, borderRadius: '50%', border: t.done ? 'none' : `2px solid ${C.green}`, background: t.done ? C.green : 'transparent', cursor: 'pointer', flexShrink: 0, color: '#fff', fontSize: 12 }}>{t.done ? '✓' : ''}</button>
+            <button onClick={() => apiAndReload('PATCH', `/api/menage/tasks/${t.id}`, loadT)} style={{ width: 22, height: 22, borderRadius: '50%', border: t.done ? 'none' : `2px solid ${C.green}`, background: t.done ? C.green : 'transparent', cursor: 'pointer', flexShrink: 0, color: '#fff', fontSize: 12 }}>{t.done ? '✓' : ''}</button>
             <span style={{ flex: 1, color: t.done ? C.muted : C.text, textDecoration: t.done ? 'line-through' : 'none' }}>{t.name}</span>
-            <Btn onClick={() => api('DELETE', `/api/menage/tasks/${t.id}`)} small variant="danger">✕</Btn>
+            <Btn onClick={() => apiAndReload('DELETE', `/api/menage/tasks/${t.id}`, loadT)} small variant="danger">✕</Btn>
           </Card>
         ))}
       </>}
@@ -146,7 +152,7 @@ function MenageTab({ familyId }) {
             </select>
             <Input value={machForm.linge} onChange={v => setMachForm(f => ({ ...f, linge: v }))} placeholder="Linge (ex: draps)..." style={{ flex: 1 }} />
             <Input value={machForm.programme} onChange={v => setMachForm(f => ({ ...f, programme: v }))} placeholder="Programme (ex: 60°)..." style={{ flex: 1 }} />
-            <Btn onClick={async () => { await api('POST', '/api/menage/machines', machForm); setMachForm(f => ({ ...f, linge: '', programme: '' })); }} variant="primary">+</Btn>
+            <Btn onClick={async () => { await apiAndReload('POST', '/api/menage/machines', loadM, machForm); setMachForm(f => ({ ...f, linge: '', programme: '' })); }} variant="primary">+</Btn>
           </div>
         </Card>
         {loadingM ? <p style={{ color: C.muted }}>Chargement...</p> : machines.map(m => (
@@ -156,8 +162,8 @@ function MenageTab({ familyId }) {
               <div style={{ color: C.text, fontWeight: 500 }}>{m.linge}</div>
               <div style={{ color: C.muted, fontSize: 12 }}>{m.machine} · {m.programme}</div>
             </div>
-            <button onClick={() => api('PATCH', `/api/menage/machines/${m.id}`)} style={{ background: m.done ? C.green : '#1e1e2e', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}>{m.done ? '✓ Fait' : 'Terminer'}</button>
-            <Btn onClick={() => api('DELETE', `/api/menage/machines/${m.id}`)} small variant="danger">✕</Btn>
+            <button onClick={() => apiAndReload('PATCH', `/api/menage/machines/${m.id}`, loadM)} style={{ background: m.done ? C.green : '#1e1e2e', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontSize: 13 }}>{m.done ? '✓ Fait' : 'Terminer'}</button>
+            <Btn onClick={() => apiAndReload('DELETE', `/api/menage/machines/${m.id}`, loadM)} small variant="danger">✕</Btn>
           </Card>
         ))}
       </>}
@@ -167,7 +173,7 @@ function MenageTab({ familyId }) {
 
 // ── Onglet Contrôles ─────────────────────────────────────────
 function ControlesTab({ familyId }) {
-  const [items, loading] = useData('/api/controles', 'controles', familyId);
+  const [items, loading, load] = useData('/api/controles', 'controles', familyId);
   const [form, setForm] = useState({ name: '', icon: '🔧', freq_days: 90, is_critical: false });
 
   function daysLeft(item) {
@@ -188,7 +194,7 @@ function ControlesTab({ familyId }) {
           <Input value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Nom du contrôle..." style={{ flex: '1 1 150px' }} />
           <Input value={form.icon} onChange={v => setForm(f => ({ ...f, icon: v }))} placeholder="🔧" style={{ width: 56 }} />
           <Input value={form.freq_days} onChange={v => setForm(f => ({ ...f, freq_days: Number(v) }))} placeholder="Jours" style={{ width: 70 }} />
-          <Btn onClick={async () => { await api('POST', '/api/controles', form); setForm({ name: '', icon: '🔧', freq_days: 90, is_critical: false }); }} variant="primary">+</Btn>
+          <Btn onClick={async () => { await apiAndReload('POST', '/api/controles', load, form); setForm({ name: '', icon: '🔧', freq_days: 90, is_critical: false }); }} variant="primary">+</Btn>
         </div>
       </Card>
       {loading ? <p style={{ color: C.muted }}>Chargement...</p> : items.map(item => {
@@ -204,9 +210,9 @@ function ControlesTab({ familyId }) {
               <div style={{ color: statusColor(item), fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
                 {d === null ? 'Jamais fait' : d < 0 ? `En retard ${-d}j` : `${d}j restants`}
               </div>
-              <Btn onClick={() => api('PATCH', `/api/controles/${item.id}`, { check: true })} small>✓ Fait</Btn>
+              <Btn onClick={() => apiAndReload('PATCH', `/api/controles/${item.id}`, load, { check: true })} small>✓ Fait</Btn>
             </div>
-            <Btn onClick={() => api('DELETE', `/api/controles/${item.id}`)} small variant="danger">✕</Btn>
+            <Btn onClick={() => apiAndReload('DELETE', `/api/controles/${item.id}`, load)} small variant="danger">✕</Btn>
           </Card>
         );
       })}
@@ -216,7 +222,7 @@ function ControlesTab({ familyId }) {
 
 // ── Onglet Repas ─────────────────────────────────────────────
 function RepasTab({ familyId }) {
-  const [items, loading] = useData('/api/repas', 'repas', familyId);
+  const [items, loading, load] = useData('/api/repas', 'repas', familyId);
   const [form, setForm] = useState({ name: '', category: 'Plat', notes: '' });
   const [search, setSearch] = useState('');
   const CATS = ['Entrée', 'Plat', 'Dessert', 'Soupe', 'Salade', 'Autre'];
@@ -231,18 +237,18 @@ function RepasTab({ familyId }) {
           <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ background: '#1e1e2e', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text }}>
             {CATS.map(c => <option key={c}>{c}</option>)}
           </select>
-          <Btn onClick={async () => { await api('POST', '/api/repas', form); setForm(f => ({ ...f, name: '', notes: '' })); }} variant="primary">+</Btn>
+          <Btn onClick={async () => { await apiAndReload('POST', '/api/repas', load, form); setForm(f => ({ ...f, name: '', notes: '' })); }} variant="primary">+</Btn>
         </div>
         <Input value={search} onChange={setSearch} placeholder="🔍 Rechercher..." />
       </Card>
       {loading ? <p style={{ color: C.muted }}>Chargement...</p> : filtered.map(item => (
         <Card key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={() => api('PATCH', `/api/repas/${item.id}`, { is_favorite: !item.is_favorite })} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }}>{item.is_favorite ? '⭐' : '☆'}</button>
+          <button onClick={() => apiAndReload('PATCH', `/api/repas/${item.id}`, load, { is_favorite: !item.is_favorite })} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer' }}>{item.is_favorite ? '⭐' : '☆'}</button>
           <div style={{ flex: 1 }}>
             <div style={{ color: C.text, fontWeight: 500 }}>{item.name}</div>
             <div style={{ color: C.muted, fontSize: 12 }}>{item.category}{item.notes ? ` · ${item.notes}` : ''}</div>
           </div>
-          <Btn onClick={() => api('DELETE', `/api/repas/${item.id}`)} small variant="danger">✕</Btn>
+          <Btn onClick={() => apiAndReload('DELETE', `/api/repas/${item.id}`, load)} small variant="danger">✕</Btn>
         </Card>
       ))}
     </div>
@@ -251,7 +257,7 @@ function RepasTab({ familyId }) {
 
 // ── Onglet Caméras ───────────────────────────────────────────
 function CamerasTab({ familyId }) {
-  const [items, loading] = useData('/api/cameras', 'cameras', familyId);
+  const [items, loading, load] = useData('/api/cameras', 'cameras', familyId);
   const [form, setForm] = useState({ name: '', location: '', app: 'yesihome' });
 
   return (
@@ -260,7 +266,7 @@ function CamerasTab({ familyId }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Input value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Nom..." style={{ flex: '1 1 120px' }} />
           <Input value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))} placeholder="Emplacement..." style={{ flex: '1 1 120px' }} />
-          <Btn onClick={async () => { await api('POST', '/api/cameras', form); setForm(f => ({ ...f, name: '', location: '' })); }} variant="primary">+</Btn>
+          <Btn onClick={async () => { await apiAndReload('POST', '/api/cameras', load, form); setForm(f => ({ ...f, name: '', location: '' })); }} variant="primary">+</Btn>
         </div>
       </Card>
       {loading ? <p style={{ color: C.muted }}>Chargement...</p> : items.map(cam => (
@@ -270,7 +276,7 @@ function CamerasTab({ familyId }) {
             <div style={{ color: C.text, fontWeight: 600 }}>{cam.name}</div>
             <div style={{ color: C.muted, fontSize: 12 }}>{cam.location} · {cam.app}</div>
           </div>
-          <Btn onClick={() => api('DELETE', `/api/cameras/${cam.id}`)} small variant="danger">✕</Btn>
+          <Btn onClick={() => apiAndReload('DELETE', `/api/cameras/${cam.id}`, load)} small variant="danger">✕</Btn>
         </Card>
       ))}
     </div>
@@ -279,7 +285,7 @@ function CamerasTab({ familyId }) {
 
 // ── Onglet Urgences ──────────────────────────────────────────
 function UrgencesTab({ familyId }) {
-  const [items, loading] = useData('/api/contacts', 'contacts', familyId);
+  const [items, loading, load] = useData('/api/contacts', 'contacts', familyId);
   const [form, setForm] = useState({ name: '', phone: '', category: 'Médical', note: '' });
   const CATS = ['Médical', 'Pompiers', 'Police', 'Famille', 'Voisins', 'Autre'];
 
@@ -294,7 +300,7 @@ function UrgencesTab({ familyId }) {
           <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ background: '#1e1e2e', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text }}>
             {CATS.map(c => <option key={c}>{c}</option>)}
           </select>
-          <Btn onClick={async () => { await api('POST', '/api/contacts', form); setForm(f => ({ ...f, name: '', phone: '' })); }} variant="primary">+</Btn>
+          <Btn onClick={async () => { await apiAndReload('POST', '/api/contacts', load, form); setForm(f => ({ ...f, name: '', phone: '' })); }} variant="primary">+</Btn>
         </div>
       </Card>
       {loading ? <p style={{ color: C.muted }}>Chargement...</p> : Object.entries(grouped).map(([cat, contacts]) => (
@@ -307,7 +313,7 @@ function UrgencesTab({ familyId }) {
                 {c.note && <div style={{ color: C.muted, fontSize: 12 }}>{c.note}</div>}
               </div>
               <a href={`tel:${c.phone}`} style={{ color: C.green, fontWeight: 600, fontSize: 14, textDecoration: 'none', background: '#0d2e1a', padding: '6px 12px', borderRadius: 8 }}>📞 {c.phone}</a>
-              <Btn onClick={() => api('DELETE', `/api/contacts/${c.id}`)} small variant="danger">✕</Btn>
+              <Btn onClick={() => apiAndReload('DELETE', `/api/contacts/${c.id}`, load)} small variant="danger">✕</Btn>
             </Card>
           ))}
         </div>
