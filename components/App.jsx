@@ -269,11 +269,6 @@ function CamerasTab({ familyId }) {
   const [items, loading, load] = useData('/api/cameras', 'cameras', familyId);
   const [form, setForm] = useState({ name: '', location: '', app: 'yesihome' });
 
-  function openApp(appKey) {
-    const link = APP_LINKS[appKey];
-    if (link) window.location.href = link;
-  }
-
   return (
     <div>
       <Card>
@@ -294,12 +289,13 @@ function CamerasTab({ familyId }) {
             <div style={{ color: C.text, fontWeight: 600 }}>{cam.name}</div>
             <div style={{ color: C.muted, fontSize: 12 }}>{cam.location}</div>
           </div>
-          <button onClick={() => openApp(cam.app)} style={{
+          <a href={APP_LINKS[cam.app] || '#'} style={{
             background: '#1e1e2e', border: `1px solid ${C.border}`, borderRadius: 8,
-            padding: '7px 12px', color: C.accent, fontSize: 13, cursor: 'pointer', fontWeight: 500,
+            padding: '7px 12px', color: C.accent, fontSize: 13, fontWeight: 500,
+            textDecoration: 'none', display: 'inline-block',
           }}>
             📱 {APP_LABELS[cam.app] || cam.app}
-          </button>
+          </a>
           <Btn onClick={() => apiAndReload('DELETE', `/api/cameras/${cam.id}`, load)} small variant="danger">✕</Btn>
         </Card>
       ))}
