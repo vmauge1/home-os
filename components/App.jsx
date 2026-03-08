@@ -256,9 +256,23 @@ function RepasTab({ familyId }) {
 }
 
 // ── Onglet Caméras ───────────────────────────────────────────
+const APP_LINKS = {
+  yesihome: 'yesihome://',
+  imoulife: 'imoulife://',
+};
+const APP_LABELS = {
+  yesihome: 'YesiHome',
+  imoulife: 'Imou Life',
+};
+
 function CamerasTab({ familyId }) {
   const [items, loading, load] = useData('/api/cameras', 'cameras', familyId);
   const [form, setForm] = useState({ name: '', location: '', app: 'yesihome' });
+
+  function openApp(appKey) {
+    const link = APP_LINKS[appKey];
+    if (link) window.location.href = link;
+  }
 
   return (
     <div>
@@ -266,6 +280,10 @@ function CamerasTab({ familyId }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <Input value={form.name} onChange={v => setForm(f => ({ ...f, name: v }))} placeholder="Nom..." style={{ flex: '1 1 120px' }} />
           <Input value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))} placeholder="Emplacement..." style={{ flex: '1 1 120px' }} />
+          <select value={form.app} onChange={e => setForm(f => ({ ...f, app: e.target.value }))} style={{ background: '#1e1e2e', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text }}>
+            <option value="yesihome">YesiHome</option>
+            <option value="imoulife">Imou Life</option>
+          </select>
           <Btn onClick={async () => { await apiAndReload('POST', '/api/cameras', load, form); setForm(f => ({ ...f, name: '', location: '' })); }} variant="primary">+</Btn>
         </div>
       </Card>
@@ -274,8 +292,14 @@ function CamerasTab({ familyId }) {
           <span style={{ fontSize: 28 }}>📷</span>
           <div style={{ flex: 1 }}>
             <div style={{ color: C.text, fontWeight: 600 }}>{cam.name}</div>
-            <div style={{ color: C.muted, fontSize: 12 }}>{cam.location} · {cam.app}</div>
+            <div style={{ color: C.muted, fontSize: 12 }}>{cam.location}</div>
           </div>
+          <button onClick={() => openApp(cam.app)} style={{
+            background: '#1e1e2e', border: `1px solid ${C.border}`, borderRadius: 8,
+            padding: '7px 12px', color: C.accent, fontSize: 13, cursor: 'pointer', fontWeight: 500,
+          }}>
+            📱 {APP_LABELS[cam.app] || cam.app}
+          </button>
           <Btn onClick={() => apiAndReload('DELETE', `/api/cameras/${cam.id}`, load)} small variant="danger">✕</Btn>
         </Card>
       ))}
